@@ -27,7 +27,7 @@ for i in range(len(filtered_time)):
         current_note.append((filtered_time[i], filtered_frequency[i], filtered_confidence[i]))
     else:
         time_diff = filtered_time[i] - current_note[-1][0]
-        if time_diff <= 0.03:
+        if time_diff <= 0.07:
             current_note.append((filtered_time[i], filtered_frequency[i], filtered_confidence[i]))
         else:
             notes.append(current_note)
@@ -42,7 +42,7 @@ longNotes = []
 for noteArray in notes:
     timeLast, freqLast, confLast = noteArray[-1]
     timeFirst, freqFirst, confFirst = noteArray[0]
-    if (timeLast - timeFirst) > 0.07:
+    if (timeLast - timeFirst) > 0.05:
         longNotes.append(noteArray)
 
 notes = longNotes
@@ -57,13 +57,30 @@ def frequency_to_note(freq):
     n = h % 12
     return note_names[n] + str(octave)
 
+
+def distanceToNote(freq):
+    A4 = 440.0
+    C0 = A4 * pow(2, -4.75)
+    h = round(12 * np.log2(freq / C0))
+    closest_note_freq = C0 * pow(2, h / 12)
+    distance = freq - closest_note_freq
+    return distance
+
+distance = None
+
 # Calculate weighted average of frequencies for each note and match with initial and ending time
 weighted_averages = []
 for note in notes:
     times, freqs, confs = zip(*note)
     weighted_avg_freq = np.average(freqs, weights=confs)
+    
     start_time = times[0]
     end_time = times[-1]
+    if distance == None:
+        distance = distanceToNote(weighted_avg_freq)
+        print(distance)
+    else:
+        weighted_avg_freq += distance
     musical_note = frequency_to_note(weighted_avg_freq)
     weighted_averages.append((musical_note, weighted_avg_freq, start_time, end_time))
 
@@ -98,15 +115,6 @@ plt.tight_layout()
 plt.savefig('pitch_analysis_filtered.png')
 plt.show()
 
-# Save results to a CSV file
-df = pd.DataFrame(data, columns=['time', 'frequency', 'confidence'])
-df.to_csv('pitch_results_filtered.csv', index=False)
 
-# Save the weighted averages and notes to a CSV file
-df_notes = pd.DataFrame(weighted_averages, columns=['Note', 'Frequency', 'Start Time', 'End Time'])
-df_notes.to_csv('notes_results.csv', index=False)
-
-print("Analysis complete. Results saved to 'pitch_results_filtered.csv' and 'pitch_analysis_filtered.png'.")
-print("Notes results saved to 'notes_results.csv'.")
 
 
