@@ -42,7 +42,7 @@ longNotes = []
 for noteArray in notes:
     timeLast, freqLast, confLast = noteArray[-1]
     timeFirst, freqFirst, confFirst = noteArray[0]
-    if (timeLast - timeFirst) > 0.05:
+    if (timeLast - timeFirst) > 0.02:
         longNotes.append(noteArray)
 
 notes = longNotes
