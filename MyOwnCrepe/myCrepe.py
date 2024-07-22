@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 # Load the audio file
-sr, audio = wavfile.read('voice_recording_reduced.wav')
+sr, audio = wavfile.read('audio.wav')
 
 # Predict the pitch
 time, frequency, confidence, activation = crepe.predict(audio, sr, viterbi=True, model_capacity='medium')
@@ -22,16 +22,30 @@ filtered_confidence = [d[2] for d in data]
 notes = []
 current_note = []
 
+prev_f = None
+prev_t = None
+
+note_diff = None
+
 for i in range(len(filtered_time)):
+    if i != 0:
+        note_diff = abs((filtered_frequency[i] - prev_f) / (filtered_time[i] - prev_t))
+        if note_diff > 400:
+            print("Note diff and time")
+            print(note_diff)
+            print(filtered_time[i])
     if not current_note:
         current_note.append((filtered_time[i], filtered_frequency[i], filtered_confidence[i]))
     else:
         time_diff = filtered_time[i] - current_note[-1][0]
-        if time_diff <= 0.07:
+        if time_diff <= 0.1 and note_diff != None and note_diff < 160:
             current_note.append((filtered_time[i], filtered_frequency[i], filtered_confidence[i]))
         else:
             notes.append(current_note)
             current_note = [(filtered_time[i], filtered_frequency[i], filtered_confidence[i])]
+    prev_t = filtered_time[i]
+    prev_f = filtered_frequency[i]
+
 
 # Append the last note if it exists
 if current_note:
@@ -42,7 +56,7 @@ longNotes = []
 for noteArray in notes:
     timeLast, freqLast, confLast = noteArray[-1]
     timeFirst, freqFirst, confFirst = noteArray[0]
-    if (timeLast - timeFirst) > 0.02:
+    if (timeLast - timeFirst) > 0.07:
         longNotes.append(noteArray)
 
 notes = longNotes
@@ -56,7 +70,6 @@ def frequency_to_note(freq):
     octave = h // 12
     n = h % 12
     return note_names[n] + str(octave)
-
 
 def distanceToNote(freq):
     A4 = 440.0
@@ -76,11 +89,7 @@ for note in notes:
     
     start_time = times[0]
     end_time = times[-1]
-    if distance == None:
-        distance = distanceToNote(weighted_avg_freq)
-        print(distance)
-    else:
-        weighted_avg_freq += distance
+    
     musical_note = frequency_to_note(weighted_avg_freq)
     weighted_averages.append((musical_note, weighted_avg_freq, start_time, end_time))
 
@@ -91,30 +100,24 @@ for i, (note, avg, start, end) in enumerate(weighted_averages):
 # Plot the results
 plt.figure(figsize=(12, 12))
 
-# Plot frequency
-plt.subplot(3, 1, 1)
-plt.scatter(filtered_time, filtered_frequency, s=1)
-plt.title('Pitch Estimation (Filtered)')
+# Plot frequency with overlapping notes and confidence strength
+plt.subplot(2, 1, 1)
+scatter = plt.scatter(filtered_time, filtered_frequency, c=filtered_confidence, cmap='viridis', s=5, alpha=0.7)
+plt.colorbar(scatter, label='Confidence')
+for note, freq, start, end in weighted_averages:
+    plt.hlines(y=freq, xmin=start, xmax=end, linewidth=2, color='r')
+    plt.text(start, freq, note, verticalalignment='bottom', fontsize=8)
+plt.title('Pitch Estimation with Detected Notes and Confidence')
 plt.ylabel('Frequency (Hz)')
-
-# Plot confidence
-plt.subplot(3, 1, 2)
-plt.scatter(filtered_time, filtered_confidence, s=1)
-plt.title('Confidence (Filtered)')
-plt.ylabel('Confidence')
 plt.xlabel('Time (s)')
 
 # Plot activation
-plt.subplot(3, 1, 3)
+plt.subplot(2, 1, 2)
 plt.imshow(np.flip(activation.T, axis=0), aspect='auto', cmap='inferno', extent=[time[0], time[-1], 0, 360])
 plt.title('Activation Matrix')
 plt.ylabel('Frequency Bin')
 plt.xlabel('Time (s)')
 
 plt.tight_layout()
-plt.savefig('pitch_analysis_filtered.png')
+plt.savefig('pitch_analysis_with_notes_and_confidence.png')
 plt.show()
-
-
-
-
