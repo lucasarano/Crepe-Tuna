@@ -11,7 +11,7 @@ sr, audio = wavfile.read('audio.wav')
 time, frequency, confidence, activation = crepe.predict(audio, sr, viterbi=True, model_capacity='medium')
 
 # Create an array of tuples and filter by confidence
-data = [(t, f, c) for t, f, c in zip(time, frequency, confidence) if c > 0.75]
+data = [(t, f, c) for t, f, c in zip(time, frequency, confidence) if c > 0.78]
 
 # Extract the filtered values for plotting
 filtered_time = [d[0] for d in data]
@@ -38,7 +38,7 @@ for i in range(len(filtered_time)):
         current_note.append((filtered_time[i], filtered_frequency[i], filtered_confidence[i]))
     else:
         time_diff = filtered_time[i] - current_note[-1][0]
-        if time_diff <= 0.1 and note_diff != None and note_diff < 160:
+        if time_diff <= 0.1 and note_diff != None and note_diff < 180:
             current_note.append((filtered_time[i], filtered_frequency[i], filtered_confidence[i]))
         else:
             notes.append(current_note)
@@ -56,7 +56,7 @@ longNotes = []
 for noteArray in notes:
     timeLast, freqLast, confLast = noteArray[-1]
     timeFirst, freqFirst, confFirst = noteArray[0]
-    if (timeLast - timeFirst) > 0.07:
+    if (timeLast - timeFirst) > 0.03:
         longNotes.append(noteArray)
 
 notes = longNotes

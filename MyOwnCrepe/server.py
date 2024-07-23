@@ -26,7 +26,7 @@ def analyze_audio(file_path):
     time, frequency, confidence, activation = crepe.predict(file, sr, viterbi=True, model_capacity='medium')
 
     # Create an array of tuples and filter by confidence
-    data = [(t, f, c) for t, f, c in zip(time, frequency, confidence) if c > 0.75]
+    data = [(t, f, c) for t, f, c in zip(time, frequency, confidence) if c > 0.78]
 
     # Extract the filtered values
     filtered_time = [d[0] for d in data]
@@ -47,7 +47,7 @@ def analyze_audio(file_path):
             current_note.append((filtered_time[i], filtered_frequency[i], filtered_confidence[i]))
         else:
             time_diff = filtered_time[i] - current_note[-1][0]
-            if time_diff <= 0.1 and note_diff is not None and note_diff < 100:
+            if time_diff <= 0.1 and note_diff is not None and note_diff < 180:
                 current_note.append((filtered_time[i], filtered_frequency[i], filtered_confidence[i]))
             else:
                 notes.append(current_note)
@@ -62,7 +62,7 @@ def analyze_audio(file_path):
     for note_array in notes:
         time_last, freq_last, conf_last = note_array[-1]
         time_first, freq_first, conf_first = note_array[0]
-        if (time_last - time_first) > 0.07:
+        if (time_last - time_first) > 0.03:
             long_notes.append(note_array)
 
     notes = long_notes
