@@ -7,6 +7,11 @@ import warnings
 
 app = Flask(__name__)
 
+# Root route for basic verification
+@app.route('/')
+def home():
+    return "Welcome to Crepe-Tuna API!"
+
 # Filter out the WavFileWarning
 
 def frequency_to_note(freq):

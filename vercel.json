@@ -1,0 +1,10 @@
+{
+    "version": 2,
+    "builds": [
+      { "src": "MyOwnCrepe/server.py", "use": "@vercel/python" }
+    ],
+    "routes": [
+      { "src": "/(.*)", "dest": "MyOwnCrepe/server.py" }
+    ]
+  }
+  
