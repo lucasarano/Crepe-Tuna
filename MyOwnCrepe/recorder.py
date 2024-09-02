@@ -74,7 +74,7 @@ class AudioRecorder:
         except Exception as e:
             print(f"Failed to stop recording: {e}")
 
-def record(output_filename="voice_recording.wav", output_filename_reduced="voice_recording_reduced.wav"):
+def record(output_filename="felipe.wav", output_filename_reduced="voice_recording_reduced.wav"):
     recorder = AudioRecorder(output_filename, output_filename_reduced)
 
     def start_recording_thread():
@@ -102,4 +102,4 @@ def record(output_filename="voice_recording.wav", output_filename_reduced="voice
     print("Recording process has completed.")
 
 if __name__ == "__main__":
-    record()
+    record("voice.wav")
