@@ -19,7 +19,7 @@ def frequency_to_note(freq):
     return note_names[n] + str(octave)
 
 def analyze_audio(file_path):
-    # Load the file file
+    # Load the file
     sr, file = wavfile.read(file_path)
 
     # Predict the pitch
