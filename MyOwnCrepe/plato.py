@@ -11,7 +11,6 @@ To run this tool, run the following command:
     python plato.py wavfilename.wav
 Use recorder.py to record a wav audio file.
 """
-# pip freeze > requirements.txt
 
 def pretty_print_result(result):
     print("\nAnalysis Results:")
