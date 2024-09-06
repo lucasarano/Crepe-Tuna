@@ -3,36 +3,17 @@ import os
 import sys
 from tabulate import tabulate
 from pprint import pprint
-from model import analyze_audio
-
+from model import analyze_audio_dos
 """
 CLI tool to analyze audio, simplifies testing without a server.
 To run this tool, run the following command:
     python plato.py wavfilename.wav
 Use recorder.py to record a wav audio file.
 """
-# pip freeze > requirements.txt
 
-def pretty_print_result(result):
-    print("\nAnalysis Results:")
-    if isinstance(result, dict):
-        # If result is a dictionary, use pprint
-        pprint(result, width=100, sort_dicts=False)
-    elif isinstance(result, list):
-        # If result is a list, try to use tabulate
-        if result and isinstance(result[0], dict):
-            # If it's a list of dictionaries, extract keys for headers
-            headers = result[0].keys()
-            table = [[row.get(col, '') for col in headers] for row in result]
-            print(tabulate(table, headers=headers, tablefmt="grid"))
-        else:
-            # If it's a simple list, just use pprint
-            pprint(result, width=100)
-    else:
-        # For any other type, use str() and print
-        print(str(result))
 
 def main():
+    """
     parser = argparse.ArgumentParser(description="Analyze an audio file.")
     parser.add_argument("audio_file", nargs="?", help="The audio file to analyze (should be a .wav file)")
     args = parser.parse_args()
@@ -53,14 +34,12 @@ def main():
         if not os.path.exists(audio_file):
             print(f"Error: The file '{audio_file}' does not exist.")
             sys.exit(1)
-
+"""
     try:
         print("Analyzing audio...")
-        file_path = os.path.join('./', audio_file)
-        result = analyze_audio(file_path)
-        pretty_print_result(result)
+        file_path = os.path.join('./', "audio.wav")
+        #result = analyze_audio_dos(file_path)
 
-        return result
     except Exception as e:
         print(f"An error occurred while analyzing the file: {str(e)}")
         sys.exit(1)
