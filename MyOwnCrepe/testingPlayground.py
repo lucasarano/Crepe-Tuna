@@ -93,5 +93,5 @@ def analyze_and_plot_audio(file_path, median_window=15, penalty=15, min_duration
 
     return time, segmented_frequency, quantized_freq
 
-
-time, segmented_freq, quantized_freq = analyze_and_plot_audio('voice_recording.wav')
+if __name__ == '__main__':
+    analyze_and_plot_audio("../audio/dakitiInCulc.wav", median_window=31, penalty=20, min_duration=0.2, merge_threshold=0.25)

@@ -8,7 +8,7 @@ import pandas as pd
 def main():
     # Load the audio file
     # sr, audio = wavfile.read('audio.wav')
-    sr, audio = wavfile.read('audio.wav')
+    sr, audio = wavfile.read('../audio/audio.wav')
 
     # Predict the pitch
     time, frequency, confidence, activation = crepe.predict(audio, sr, viterbi=True, model_capacity='medium')

@@ -59,7 +59,7 @@ def analyze_and_plot_audio(file_path, median_window=99, min_size=10, penalty=10)
 
 
 if __name__ == '__main__':
-    file_path = './voice_recording.wav'
+    file_path = '../audio/voice_recording.wav'
     analyze_and_plot_audio(file_path, median_window=21, min_size=10, penalty=5)
 
 def analyze_audio(file_path):

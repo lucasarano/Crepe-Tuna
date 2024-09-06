@@ -3,7 +3,7 @@ import wave
 import threading
 import librosa
 import numpy as np
-from myCrepe import main
+from testingPlayground import analyze_and_plot_audio
 
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
@@ -77,8 +77,8 @@ class AudioRecorder:
             print(f"Failed to stop recording: {e}")
 
 
-def record(output_filename="felipe.wav", output_filename_reduced="voice_recording_reduced.wav"):
-    recorder = AudioRecorder(output_filename, output_filename_reduced)
+def record(output_filename):
+    recorder = AudioRecorder(output_filename, output_filename+"_reduced.wav")
 
     def start_recording_thread():
         try:
@@ -106,5 +106,6 @@ def record(output_filename="felipe.wav", output_filename_reduced="voice_recordin
 
 
 if __name__ == "__main__":
-    record("audio.wav")
-    main()
+    filename = f"../audio/{input('Enter name of audio file: ')}.wav"
+    record(filename)
+    analyze_and_plot_audio(filename)
