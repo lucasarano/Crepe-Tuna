@@ -3,7 +3,7 @@ import os
 import sys
 from tabulate import tabulate
 from pprint import pprint
-from model import analyze_audio_dos
+from model import analyze_and_plot_audio
 """
 CLI tool to analyze audio, simplifies testing without a server.
 To run this tool, run the following command:
