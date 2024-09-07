@@ -110,7 +110,7 @@ def main():
     s_time_th = Slider(ax_time_th, 'Time Threshold', 0.01, 0.2, valinit=0.05)
     s_ext_time_th = Slider(ax_ext_time_th, 'Extended Time Threshold', 0.05, 0.3, valinit=0.1)
     s_pitch_th = Slider(ax_pitch_th, 'Pitch Threshold', 0.5, 10.0, valinit=4.0)
-    s_max_slope = Slider(ax_max_slope, 'Max Slope', 1, 20, valinit=5)
+    s_max_slope = Slider(ax_max_slope, 'Max Slope', 1, 50, valinit=5)
 
     def update(val):
         time_th = s_time_th.val
