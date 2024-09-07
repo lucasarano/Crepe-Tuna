@@ -1,6 +1,8 @@
 import crepe
 from scipy.io import wavfile
+from scipy import signal
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def frequency_to_note(freq):
@@ -13,12 +15,59 @@ def frequency_to_note(freq):
     return note_names[n] + str(octave)
 
 
+from ruptures import Pelt
+
+
+def analyze_and_plot_audio(file_path, median_window=99, min_size=10, penalty=10):
+    # Load the file
+    sr, audio = wavfile.read(file_path)
+
+    # Predict the pitch
+    time, frequency, confidence, _ = crepe.predict(audio, sr, viterbi=True, model_capacity='full')
+
+    # Filter out low confidence predictions
+    high_confidence = confidence > 0.85
+    time = time[high_confidence]
+    frequency = frequency[high_confidence]
+
+    # Apply median filter
+    frequency_median = signal.medfilt(frequency, kernel_size=median_window)
+
+    # Detect change points
+    algo = Pelt(model="l2").fit(frequency_median.reshape(-1, 1))
+    change_points = algo.predict(pen=penalty)
+
+    # Segment the pitch data
+    segmented_frequency = np.zeros_like(frequency_median)
+    for start, end in zip([0] + change_points, change_points + [len(frequency_median)]):
+        if end - start >= min_size:  # Only keep segments of a minimum size
+            segmented_frequency[start:end] = np.median(frequency_median[start:end])
+
+    # Plot the results
+    plt.figure(figsize=(12, 6))
+    plt.scatter(time, frequency, s=1, alpha=0.5, label='Original', color='blue')
+    plt.scatter(time, segmented_frequency, s=2, label='Segmented', color='red')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Frequency (Hz)')
+    plt.title(f'Pitch Detection Results (Median Window: {median_window}, Penalty: {penalty})')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+    return time, segmented_frequency
+
+
+
+if __name__ == '__main__':
+    file_path = '../audio/voice_recording.wav'
+    analyze_and_plot_audio(file_path, median_window=21, min_size=10, penalty=5)
+
 def analyze_audio(file_path):
     # Load the file
     sr, file = wavfile.read(file_path)
 
     # Predict the pitch
-    time, frequency, confidence, activation = crepe.predict(file, sr, viterbi=True, model_capacity='medium')
+    time, frequency, confidence, activation = crepe.predict(file, sr, viterbi=True, model_capacity='full')
 
     # Create an array of tuples and filter by confidence
     data = [(t, f, c) for t, f, c in zip(time, frequency, confidence) if c > 0.82]

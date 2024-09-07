@@ -3,11 +3,13 @@ import wave
 import threading
 import librosa
 import numpy as np
+from testingPlayground import analyze_and_plot_audio
 
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
 FRAMES_PER_BUFFER = 1024
+
 
 class AudioRecorder:
     def __init__(self, output_filename="recorded.wav", output_filename_reduced="recorded_reduced.wav"):
@@ -57,11 +59,11 @@ class AudioRecorder:
                 waveFile.setframerate(RATE)
                 waveFile.writeframes(b''.join(self.frames))
                 waveFile.close()
-                
+
                 # Load original recording for noise reduction
                 audio, sr = librosa.load(self.output_filename, sr=None)
                 audio_reduced = librosa.effects.preemphasis(audio)
-                
+
                 # Save noise-reduced recording
                 waveFileReduced = wave.open(self.output_filename_reduced, 'wb')
                 waveFileReduced.setnchannels(CHANNELS)
@@ -69,13 +71,14 @@ class AudioRecorder:
                 waveFileReduced.setframerate(sr)
                 waveFileReduced.writeframes(np.int16(audio_reduced * 32767).tobytes())
                 waveFileReduced.close()
-                
+
             print("Finished recording.")
         except Exception as e:
             print(f"Failed to stop recording: {e}")
 
-def record(output_filename="felipe.wav", output_filename_reduced="voice_recording_reduced.wav"):
-    recorder = AudioRecorder(output_filename, output_filename_reduced)
+
+def record(output_filename):
+    recorder = AudioRecorder(output_filename, output_filename+"_reduced.wav")
 
     def start_recording_thread():
         try:
@@ -101,5 +104,8 @@ def record(output_filename="felipe.wav", output_filename_reduced="voice_recordin
 
     print("Recording process has completed.")
 
+
 if __name__ == "__main__":
-    record("voice.wav")
+    filename = f"../audio/{input('Enter name of audio file: ')}.wav"
+    record(filename)
+    analyze_and_plot_audio(filename)
