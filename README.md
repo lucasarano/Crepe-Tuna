@@ -14,7 +14,7 @@ Crepe-Tuna is a Python-based tool for analyzing monophonic audio recordings and 
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/crepe-tuna.git
+   git clone https://github.com/lucasarano/crepe-tuna.git
    cd crepe-tuna
    ```
 
