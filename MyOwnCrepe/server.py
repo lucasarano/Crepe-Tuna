@@ -7,6 +7,11 @@ import warnings
 
 app = Flask(__name__)
 
+# To test if server active
+@app.route('/', methods=['GET'])
+def home():
+    return "Server Active", 200
+
 # Filter out the WavFileWarning
 
 def frequency_to_note(freq):
