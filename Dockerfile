@@ -28,4 +28,6 @@ COPY ./app .
 EXPOSE 8080
 
 # Run the application
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 app.main:app
+ENV PORT=8080
+
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 main:app
