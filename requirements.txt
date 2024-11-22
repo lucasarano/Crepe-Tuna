@@ -99,3 +99,4 @@ Werkzeug==3.0.3
 widgetsnbextension==4.0.13
 wrapt==1.16.0
 zipp==3.19.2
+music21==8.3.0

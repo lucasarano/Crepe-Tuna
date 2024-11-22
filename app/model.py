@@ -1,18 +1,12 @@
 import os
-from flask import Flask, request, jsonify
+from midiutil import MIDIFile
+import matplotlib.pyplot as plt
 import crepe
 from scipy.io import wavfile
+import math
 import numpy as np
 import warnings
 
-app = Flask(__name__)
-
-# To test if server active
-@app.route('/', methods=['GET'])
-def home():
-    return "Server Active", 200
-
-# Filter out the WavFileWarning
 
 def frequency_to_note(freq):
     A4 = 440.0
@@ -23,12 +17,34 @@ def frequency_to_note(freq):
     n = h % 12
     return note_names[n] + str(octave)
 
-def analyze_audio(file_path):
+
+def plot_detected_notes(weighted_averages):
+    # Extract note names, start times, and durations
+    note_names = [note["name"] for note in weighted_averages]
+    start_times = [note["startTime"] for note in weighted_averages]
+    durations = [note["duration"] for note in weighted_averages]
+
+    # Create the plot
+    plt.figure(figsize=(10, 6))
+    plt.barh(note_names, durations, left=start_times, align='center', edgecolor='black')
+
+    # Add labels and title
+    plt.xlabel("Time (s)")
+    plt.ylabel("Notes")
+    plt.title("Detected Notes Over Time")
+    plt.grid(axis="x", linestyle="--", alpha=0.7)
+    plt.tight_layout()
+
+    # Show the plot
+    plt.show()
+
+
+def analyze_audio_old(file_path):
     # Load the file file
     sr, file = wavfile.read(file_path)
 
     # Predict the pitch
-    time, frequency, confidence, activation = crepe.predict(file, sr, viterbi=True, model_capacity='medium')
+    time, frequency, confidence, activation = crepe.predict(file, sr, viterbi=True, model_capacity='large')
 
     # Create an array of tuples and filter by confidence
     data = [(t, f, c) for t, f, c in zip(time, frequency, confidence) if c > 0.82]
@@ -90,29 +106,48 @@ def analyze_audio(file_path):
 
     return weighted_averages
 
-@app.route('/analyze', methods=['POST'])
-def analyze():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file file provided'}), 400
 
-    audio_file = request.files['file']
-    if audio_file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+def export_to_midi(notes, output_file="output.mid", tempo=120):
+    """
+    Convert the analyzed notes to MIDI format
 
-    if audio_file and audio_file.filename.endswith('.wav'):
-        save_directory = './'
-        os.makedirs(save_directory, exist_ok=True)
-        file_path = os.path.join(save_directory, audio_file.filename)
-        audio_file.save(file_path)
+    Args:
+        notes: List of dictionaries containing note information (from analyze_audio)
+        output_file: Path to save the MIDI file
+        tempo: Tempo in BPM (default 120)
+    """
+    # Create MIDI file with 1 track
+    midi = MIDIFile(1)
+    track = 0
+    time = 0
+    channel = 0
+    volume = 100  # 0-127
 
-        try:
-            result = analyze_audio(file_path)
-            
-            return jsonify(result)
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
+    # Set tempo
+    midi.addTempo(track, time, tempo)
 
-    return jsonify({'error': 'Invalid file format'}), 400
+    # Helper function to convert frequency to MIDI note number
+    def freq_to_midi_note(freq):
+        # A4 = 69, 440Hz
+        if freq <= 0: return 0
+        return int(round(69 + 12 * math.log2(freq / 440.0)))
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=4000, debug=True)
+    # Add notes to the MIDI file
+    for note in notes:
+        freq = note["frequency"]
+        start_time = note["startTime"]
+        duration = note["duration"]
+
+        # Convert frequency to MIDI note number
+        midi_note = freq_to_midi_note(freq)
+
+        # Convert time to beats (assuming 120 BPM)
+        midi_time = start_time * (tempo / 60.0)
+        midi_duration = duration * (tempo / 60.0)
+
+        # Add note to MIDI file
+        midi.addNote(track, channel, midi_note, midi_time, midi_duration, volume)
+
+    # Save the MIDI file
+    with open(output_file, "wb") as f:
+        midi.writeFile(f)

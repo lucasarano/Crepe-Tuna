@@ -3,7 +3,6 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/Crepe-Tuna.iml" filepath="$PROJECT_DIR$/.idea/Crepe-Tuna.iml" />
-      <module fileurl="file://$PROJECT_DIR$/../Crepe-Tuna-Docker/.idea/Crepe-Tuna-Docker.iml" filepath="$PROJECT_DIR$/../Crepe-Tuna-Docker/.idea/Crepe-Tuna-Docker.iml" />
     </modules>
   </component>
 </project>
