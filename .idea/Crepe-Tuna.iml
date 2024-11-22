@@ -6,9 +6,5 @@
     </content>
     <orderEntry type="jdk" jdkName="Python 3.9 (Crepe-Tuna)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="module" module-name="Crepe-Tuna-Docker" />
-  </component>
-  <component name="TemplatesService">
-    <option name="TEMPLATE_CONFIGURATION" value="Jinja2" />
   </component>
 </module>

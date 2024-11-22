@@ -2,124 +2,305 @@ import crepe
 from scipy.io import wavfile
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
+from matplotlib.widgets import Slider, Button
 
-# Load the audio file
-# sr, audio = wavfile.read('audio.wav')
-sr, audio = wavfile.read('audio.wav')
+def plot_pitch_and_notes(t, f, c, notes, ax1, ax2):
+    ax1.clear()
+    ax2.clear()
+    scatter = ax1.scatter(t, f, c=c, cmap='viridis', vmin=0.8, vmax=1.0)
+    midi_min, midi_max = int(min(f)), int(max(f)) + 1
+    midi_lines = range(midi_min, midi_max + 1)
+    ax1.hlines(midi_lines, min(t), max(t), colors='gray', alpha=0.3, linestyles='dashed')
+    midi_labels = [f"{midi}" for midi in midi_lines[::2]]
+    ax1.set_yticks(midi_lines[::2])
+    ax1.set_yticklabels(midi_labels)
+    ax1.set_title('Pitch Data Points with Confidence (≥ 0.8)')
+    ax1.set_ylabel('MIDI Note')
+    
+    ax2.scatter(t, f, c=c, cmap='viridis', vmin=0.8, vmax=1.0, alpha=0.5)
+    for note in notes:
+        ax2.plot([note['start_time'], note['end_time']], [note['midi'], note['midi']], linewidth=2, color='red', alpha=0.7)
+    ax2.hlines(midi_lines, min(t), max(t), colors='gray', alpha=0.3, linestyles='dashed')
+    ax2.set_yticks(midi_lines[::2])
+    ax2.set_yticklabels(midi_labels)
+    ax2.set_title('Identified Notes')
+    ax2.set_xlabel('Time (seconds)')
+    ax2.set_ylabel('MIDI Note')
 
+def linearize(freq):
+    if freq <= 0:
+        return None
+    midi_note = 69 + 12 * np.log2(freq / 440.0)
+    return midi_note
 
-# Predict the pitch
-time, frequency, confidence, activation = crepe.predict(audio, sr, viterbi=True, model_capacity='medium')
+def filter_data(t, f, c, threshold):
+    return [(t[i], f[i], c[i]) for i in range(len(t)) if c[i] >= threshold]
 
-# Create an array of tuples and filter by confidence
-data = [(t, f, c) for t, f, c in zip(time, frequency, confidence) if c > 0.82]
+def calculate_weighted_slope(dt, df, c1, c2):
+    avg_confidence = (c1 + c2) / 2
+    confidence_factor = 1 - avg_confidence  # Invert confidence to increase slope for low confidence
+    weighted_slope = abs(df / dt) * (1 + confidence_factor)
+    return weighted_slope
 
-# Extract the filtered values for plotting
-filtered_time = [d[0] for d in data]
-filtered_frequency = [d[1] for d in data]
-filtered_confidence = [d[2] for d in data]
-
-# Group frequencies into notes
-notes = []
-current_note = []
-
-prev_f = None
-prev_t = None
-
-note_diff = None
-
-for i in range(len(filtered_time)):
-    if i != 0:
-        note_diff = abs((filtered_frequency[i] - prev_f) / (filtered_time[i] - prev_t))
-        if note_diff > 400:
-            print("Note diff and time")
-            print(note_diff)
-            print(filtered_time[i])
-    if not current_note:
-        current_note.append((filtered_time[i], filtered_frequency[i], filtered_confidence[i]))
+def add_point(note, t, f, c, dt, df, time_th, ext_time_th, pitch_th, max_slope):
+    if dt > time_th:
+        if abs(df) <= pitch_th and dt <= ext_time_th:
+            note.append((t, f, c))
+            return note, True
     else:
-        time_diff = filtered_time[i] - current_note[-1][0]
-        if time_diff <= 0.1 and note_diff != None and note_diff < 140:
-            current_note.append((filtered_time[i], filtered_frequency[i], filtered_confidence[i]))
+        if len(note) > 0:
+            weighted_slope = calculate_weighted_slope(dt, df, note[-1][2], c)
+            if weighted_slope <= max_slope:
+                note.append((t, f, c))
+                return note, True
+    return note, False
+
+def finalize(note, notes, min_points):
+    if len(note) >= min_points:
+        notes.append(note)
+    return notes, []
+
+def process_notes(notes):
+    processed = []
+    for note in notes:
+        midi_vals = np.array([point[1] for point in note])
+        confidences = np.array([point[2] for point in note])
+        weighted_log = np.sum(np.log(midi_vals) * confidences) / np.sum(confidences)
+        weighted_mean_midi = np.exp(weighted_log)
+        start = note[0][0]
+        end = note[-1][0]
+        avg_conf = np.mean(confidences)
+        processed.append({
+            'midi': weighted_mean_midi,
+            'start_time': start,
+            'end_time': end,
+            'confidence': avg_conf
+        })
+    return processed
+
+def detect_notes(t, f, c, max_slope=5, min_points=4, time_th=0.05, ext_time_th=0.08, pitch_th=1.0, conf_th=0.8):
+    notes = []
+    note = []
+    for i in range(len(t)):
+        if c[i] < conf_th:
+            continue
+        if not note:
+            note.append((t[i], f[i], c[i]))
         else:
-            notes.append(current_note)
-            current_note = [(filtered_time[i], filtered_frequency[i], filtered_confidence[i])]
-    prev_t = filtered_time[i]
-    prev_f = filtered_frequency[i]
+            dt = t[i] - note[-1][0]
+            df = f[i] - note[-1][1]
+            note, added = add_point(note, t[i], f[i], c[i], dt, df, time_th, ext_time_th, pitch_th, max_slope)
+            if not added:
+                notes, note = finalize(note, notes, min_points)
+                note.append((t[i], f[i], c[i]))
+    notes, _ = finalize(note, notes, min_points)
+    return process_notes(notes)
+
+def main():
+    sr, audio = wavfile.read('voice.wav')
+    time, freq, conf, activation = crepe.predict(audio, sr, viterbi=True, model_capacity='full')
+    data = filter_data(time, freq, conf, threshold=0.8)
+    t = [d[0] for d in data]
+    f = [linearize(d[1]) for d in data]
+    c = [d[2] for d in data]
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 16))
+    plt.subplots_adjust(left=0.1, bottom=0.35)
+
+    initial_notes = detect_notes(t, f, c, time_th=0.05, ext_time_th=0.1, pitch_th=4.0)
+    plot_pitch_and_notes(t, f, c, initial_notes, ax1, ax2)
+
+    # Create sliders
+    ax_time_th = plt.axes([0.1, 0.2, 0.65, 0.03])
+    ax_ext_time_th = plt.axes([0.1, 0.15, 0.65, 0.03])
+    ax_pitch_th = plt.axes([0.1, 0.1, 0.65, 0.03])
+    ax_max_slope = plt.axes([0.1, 0.05, 0.65, 0.03])
+
+    s_time_th = Slider(ax_time_th, 'Time Threshold', 0.01, 0.2, valinit=0.05)
+    s_ext_time_th = Slider(ax_ext_time_th, 'Extended Time Threshold', 0.05, 0.3, valinit=0.1)
+    s_pitch_th = Slider(ax_pitch_th, 'Pitch Threshold', 0.5, 10.0, valinit=4.0)
+    s_max_slope = Slider(ax_max_slope, 'Max Slope', 1, 50, valinit=5)
+
+    def update(val):
+        time_th = s_time_th.val
+        ext_time_th = s_ext_time_th.val
+        pitch_th = s_pitch_th.val
+        max_slope = s_max_slope.val
+        notes = detect_notes(t, f, c, time_th=time_th, ext_time_th=ext_time_th, pitch_th=pitch_th, max_slope=max_slope)
+        plot_pitch_and_notes(t, f, c, notes, ax1, ax2)
+        fig.canvas.draw_idle()
+
+    s_time_th.on_changed(update)
+    s_ext_time_th.on_changed(update)
+    s_pitch_th.on_changed(update)
+    s_max_slope.on_changed(update)
+
+    plt.show()
+
+if __name__ == '__main__':
+    main()
 
 
-# Append the last note if it exists
-if current_note:
-    notes.append(current_note)
 
-longNotes = []
+# import crepe
+# from scipy.io import wavfile
+# import matplotlib.pyplot as plt
+# import numpy as np
+# from matplotlib.widgets import Slider, Button
+# import os
 
-for noteArray in notes:
-    timeLast, freqLast, confLast = noteArray[-1]
-    timeFirst, freqFirst, confFirst = noteArray[0]
-    if (timeLast - timeFirst) > 0.04:
-        longNotes.append(noteArray)
+# def moving_average(data, window_size):
+#     return np.convolve(data, np.ones(window_size), 'same') / window_size
 
-notes = longNotes
-
-# Function to convert frequency to nearest musical note
-def frequency_to_note(freq):
-    A4 = 440.0
-    C0 = A4 * pow(2, -4.75)
-    note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-    h = round(12 * np.log2(freq / C0))
-    octave = h // 12
-    n = h % 12
-    return note_names[n] + str(octave)
-
-def distanceToNote(freq):
-    A4 = 440.0
-    C0 = A4 * pow(2, -4.75)
-    h = round(12 * np.log2(freq / C0))
-    closest_note_freq = C0 * pow(2, h / 12)
-    distance = freq - closest_note_freq
-    return distance
-
-distance = None
-
-# Calculate weighted average of frequencies for each note and match with initial and ending time
-weighted_averages = []
-for note in notes:
-    times, freqs, confs = zip(*note)
-    weighted_avg_freq = np.average(freqs, weights=confs)
+# def plot_pitch_and_notes(t, f, c, f_smooth, notes, ax1, ax2):
+#     ax1.clear()
+#     ax2.clear()
+#     scatter = ax1.scatter(t, f, c=c, cmap='viridis', vmin=0.8, vmax=1.0, alpha=0.5)
+#     ax1.plot(t, f_smooth, color='red', linewidth=2)
+#     midi_min, midi_max = int(min(f)), int(max(f)) + 1
+#     midi_lines = range(midi_min, midi_max + 1)
+#     ax1.hlines(midi_lines, min(t), max(t), colors='gray', alpha=0.3, linestyles='dashed')
+#     midi_labels = [f"{midi}" for midi in midi_lines[::2]]
+#     ax1.set_yticks(midi_lines[::2])
+#     ax1.set_yticklabels(midi_labels)
+#     ax1.set_title('Pitch Data Points with Confidence (≥ 0.8) and Smoothed Pitch')
+#     ax1.set_ylabel('MIDI Note')
     
-    start_time = times[0]
-    end_time = times[-1]
+#     ax2.scatter(t, f, c=c, cmap='viridis', vmin=0.8, vmax=1.0, alpha=0.5)
+#     for note in notes:
+#         ax2.plot([note['start_time'], note['end_time']], [note['midi'], note['midi']], linewidth=2, color='red', alpha=0.7)
+#     ax2.hlines(midi_lines, min(t), max(t), colors='gray', alpha=0.3, linestyles='dashed')
+#     ax2.set_yticks(midi_lines[::2])
+#     ax2.set_yticklabels(midi_labels)
+#     ax2.set_title('Identified Notes')
+#     ax2.set_xlabel('Time (seconds)')
+#     ax2.set_ylabel('MIDI Note')
+
+# def linearize(freq):
+#     if freq <= 0:
+#         return None
+#     midi_note = 69 + 12 * np.log2(freq / 440.0)
+#     return midi_note
+
+# def filter_data(t, f, c, threshold):
+#     return [(t[i], f[i], c[i]) for i in range(len(t)) if c[i] >= threshold]
+
+# def calculate_weighted_slope(dt, df, c1, c2):
+#     avg_confidence = (c1 + c2) / 2
+#     confidence_factor = 1 - avg_confidence  # Invert confidence to increase slope for low confidence
+#     weighted_slope = abs(df / dt) * (1 + confidence_factor)
+#     return weighted_slope
+
+# def add_point(note, t, f, c, dt, df, time_th, ext_time_th, pitch_th, max_slope):
+#     if dt > time_th:
+#         if abs(df) <= pitch_th and dt <= ext_time_th:
+#             note.append((t, f, c))
+#             return note, True
+#     else:
+#         if len(note) > 0:
+#             weighted_slope = calculate_weighted_slope(dt, df, note[-1][2], c)
+#             if weighted_slope <= max_slope:
+#                 note.append((t, f, c))
+#                 return note, True
+#     return note, False
+
+# def finalize(note, notes, min_points):
+#     if len(note) >= min_points:
+#         notes.append(note)
+#     return notes, []
+
+# def process_notes(notes):
+#     processed = []
+#     for note in notes:
+#         midi_vals = np.array([point[1] for point in note])
+#         confidences = np.array([point[2] for point in note])
+#         weighted_log = np.sum(np.log(midi_vals) * confidences) / np.sum(confidences)
+#         weighted_mean_midi = np.exp(weighted_log)
+#         start = note[0][0]
+#         end = note[-1][0]
+#         avg_conf = np.mean(confidences)
+#         processed.append({
+#             'midi': weighted_mean_midi,
+#             'start_time': start,
+#             'end_time': end,
+#             'confidence': avg_conf
+#         })
+#     return processed
+
+# def detect_notes(t, f, c, max_slope=5, min_points=4, time_th=0.05, ext_time_th=0.08, pitch_th=1.0, conf_th=0.8):
+#     notes = []
+#     note = []
+#     for i in range(len(t)):
+#         if c[i] < conf_th:
+#             continue
+#         if not note:
+#             note.append((t[i], f[i], c[i]))
+#         else:
+#             dt = t[i] - note[-1][0]
+#             df = f[i] - note[-1][1]
+#             note, added = add_point(note, t[i], f[i], c[i], dt, df, time_th, ext_time_th, pitch_th, max_slope)
+#             if not added:
+#                 notes, note = finalize(note, notes, min_points)
+#                 note = [(t[i], f[i], c[i])]
+#     notes, _ = finalize(note, notes, min_points)
+#     return process_notes(notes)
+
+# def main():
+#     # Get the current directory
+#     current_dir = os.path.dirname(os.path.abspath(__file__))
     
-    musical_note = frequency_to_note(weighted_avg_freq)
-    weighted_averages.append((musical_note, weighted_avg_freq, start_time, end_time))
+    
+    
+#     # Use the first .wav file found
+    
 
-# Print the weighted averages with initial and ending time for verification
-for i, (note, avg, start, end) in enumerate(weighted_averages):
-    print(f"Note {i+1}: {note}, Weighted average frequency = {avg:.2f} Hz, Start time = {start:.2f}, End time = {end:.2f}")
+#     sr, audio = wavfile.read('voice.wav')
 
-# Plot the results
-plt.figure(figsize=(12, 12))
+#     time, freq, conf, activation = crepe.predict(audio, sr, viterbi=True, model_capacity='full')
+#     data = filter_data(time, freq, conf, threshold=0.8)
+#     t = np.array([d[0] for d in data])
+#     f = np.array([linearize(d[1]) for d in data])
+#     c = np.array([d[2] for d in data])
 
-# Plot frequency with overlapping notes and confidence strength
-plt.subplot(2, 1, 1)
-scatter = plt.scatter(filtered_time, filtered_frequency, c=filtered_confidence, cmap='viridis', s=5, alpha=0.7)
-plt.colorbar(scatter, label='Confidence')
-for note, freq, start, end in weighted_averages:
-    plt.hlines(y=freq, xmin=start, xmax=end, linewidth=2, color='r')
-    plt.text(start, freq, note, verticalalignment='bottom', fontsize=8)
-plt.title('Pitch Estimation with Detected Notes and Confidence')
-plt.ylabel('Frequency (Hz)')
-plt.xlabel('Time (s)')
+#     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 16))
+#     plt.subplots_adjust(left=0.1, bottom=0.35)
 
-# Plot activation
-plt.subplot(2, 1, 2)
-plt.imshow(np.flip(activation.T, axis=0), aspect='auto', cmap='inferno', extent=[time[0], time[-1], 0, 360])
-plt.title('Activation Matrix')
-plt.ylabel('Frequency Bin')
-plt.xlabel('Time (s)')
+#     initial_window_size = 5
+#     f_smooth = moving_average(f, initial_window_size)
+#     initial_notes = detect_notes(t, f_smooth, c, time_th=0.05, ext_time_th=0.1, pitch_th=4.0)
+#     plot_pitch_and_notes(t, f, c, f_smooth, initial_notes, ax1, ax2)
 
-plt.tight_layout()
-plt.savefig('pitch_analysis_with_notes_and_confidence.png')
-plt.show()
+#     # Create sliders
+#     ax_time_th = plt.axes([0.1, 0.25, 0.65, 0.03])
+#     ax_ext_time_th = plt.axes([0.1, 0.20, 0.65, 0.03])
+#     ax_pitch_th = plt.axes([0.1, 0.15, 0.65, 0.03])
+#     ax_max_slope = plt.axes([0.1, 0.10, 0.65, 0.03])
+#     ax_window_size = plt.axes([0.1, 0.05, 0.65, 0.03])
+
+#     s_time_th = Slider(ax_time_th, 'Time Threshold', 0.01, 0.2, valinit=0.05)
+#     s_ext_time_th = Slider(ax_ext_time_th, 'Extended Time Threshold', 0.05, 0.3, valinit=0.1)
+#     s_pitch_th = Slider(ax_pitch_th, 'Pitch Threshold', 0.5, 10.0, valinit=4.0)
+#     s_max_slope = Slider(ax_max_slope, 'Max Slope', 1, 50, valinit=5)
+#     s_window_size = Slider(ax_window_size, 'Window Size', 1, 20, valinit=initial_window_size, valstep=1)
+
+#     def update(val):
+#         time_th = s_time_th.val
+#         ext_time_th = s_ext_time_th.val
+#         pitch_th = s_pitch_th.val
+#         max_slope = s_max_slope.val
+#         window_size = int(s_window_size.val)
+#         f_smooth = moving_average(f, window_size)
+#         notes = detect_notes(t, f_smooth, c, time_th=time_th, ext_time_th=ext_time_th, pitch_th=pitch_th, max_slope=max_slope)
+#         plot_pitch_and_notes(t, f, c, f_smooth, notes, ax1, ax2)
+#         fig.canvas.draw_idle()
+
+#     s_time_th.on_changed(update)
+#     s_ext_time_th.on_changed(update)
+#     s_pitch_th.on_changed(update)
+#     s_max_slope.on_changed(update)
+#     s_window_size.on_changed(update)
+
+#     plt.show()
+
+# if __name__ == '__main__':
+#     main()
